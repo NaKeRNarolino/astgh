@@ -1,0 +1,151 @@
+[
+  {
+    "C": {
+      "title": "Collision Box",
+      "description": "This component can be specified as a Boolean. If this component is omitted, the default value for this component is true, which will give your block the default values for its parameters (a collision box the size/shape of a regular block).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "origin": {
+              "title": "Origin",
+              "description": "Minimal position of the bounds of the collision box. origin is specified as [x, y, z] and must be in the range (-8, 0, -8) to (8, 16, 8), inclusive.",
+              "type": "array",
+              "items": [
+                {
+                  "title": "X",
+                  "type": "number",
+                  "minimum": -8.0,
+                  "maximum": 8
+                },
+                { "title": "Y", "type": "number", "minimum": 0, "maximum": 16 },
+                {
+                  "title": "Z",
+                  "type": "number",
+                  "minimum": -8.0,
+                  "maximum": 8
+                }
+              ]
+            },
+            "size": {
+              "title": "Size",
+              "description": "Size of each side of the collision box. Size is specified as [x, y, z]. origin + size must be in the range (-8, 0, -8) to (8, 16, 8), inclusive.",
+              "type": "array",
+              "items": [
+                {
+                  "title": "X",
+                  "type": "number",
+                  "minimum": -8.0,
+                  "maximum": 8
+                },
+                { "title": "Y", "type": "number", "minimum": 0, "maximum": 16 },
+                {
+                  "title": "Z",
+                  "type": "number",
+                  "minimum": -8.0,
+                  "maximum": 8
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "D": {
+      "title": "Crafting Table",
+      "description": "Makes your block into a custom crafting table which enables the crafting table UI and the ability to craft recipes.",
+      "additionalProperties": false,
+      "type": "object",
+      "required": [],
+      "properties": {
+        "crafting_tags": {
+          "title": "Crafting Tags",
+          "description": "Defines the tags recipes should define to be crafted on this table. Limited to 64 tags. Each tag is limited to 64 characters.",
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "title": "Tag",
+            "description": "The tag to check for.",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "table_name": {
+          "title": "Table Name",
+          "description": "Specifies the language file key that maps to what text will be displayed in the UI of this table. If the string given can not be resolved as a loc string, the raw string given will be displayed. If this field is omitted, the name displayed will default to the name specified in the \"display_name\" component. If this block has no \"display_name\" component, the name displayed will default to the name of the block.",
+          "type": "string"
+        }
+      }
+    },
+    "E": {
+      "title": "Destructible By Explosion",
+      "description": "Describes the destructible by explosion properties for this block. If set to true, the block will have the default explosion resistance. If set to false, this block is indestructible by explosion. If the component is omitted, the block will have the default explosion resistance.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "explosion_resistance": {
+              "title": "Explosion Resistance",
+              "description": "Describes how resistant the block is to explosion. Greater values mean the block is less likely to break when near an explosion (or has higher resistance to explosions). The scale will be different for different explosion power levels. A negative value or 0 means it will easily explode; larger numbers increase level of resistance.",
+              "type": "number",
+              "default": 0.0
+            }
+          }
+        }
+      ]
+    },
+    "F": {
+      "title": "Destructible By Mining",
+      "description": "Describes the destructible by mining properties for this block. If set to true, the block will take the default number of seconds to destroy. If set to false, this block is indestructible by mining. If the component is omitted, the block will take the default number of seconds to destroy.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "seconds_to_destroy": {
+              "title": "Seconds To Destroy",
+              "description": "Sets the number of seconds it takes to destroy the block with base equipment. Greater numbers result in greater mining times.",
+              "type": "number",
+              "default": 0.0
+            }
+          }
+        }
+      ]
+    },
+    "G": {
+      "title": "Display Name",
+      "description": "Specifies the language file key that maps to what text will be displayed when you hover over the block in your inventory and hotbar. If the string given can not be resolved as a loc string, the raw string given will be displayed. If this component is omitted, the name of the block will be used as the display name.",
+      "type": "string"
+    },
+    "H": {
+      "title": "Flammable",
+      "description": "Describes the flammable properties for this block. If set to true, default values are used. If set to false, or if this component is omitted, the block will not be able to catch on fire naturally from neighbors, but it can still be directly ignited.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "catch_chance_modifier": {
+              "title": "Catch Chance Modifier",
+              "description": "A modifier affecting the chance that this block will catch flame when next to a fire. Values are greater than or equal to 0, with a higher number meaning more likely to catch on fire",
+              "type": "number",
+              "default": 5
+            },
+            "destroy_chance_modifier": {
+              "title": "Destroy Chance Modifier",
+              "description": "A modifier affecting the chance that this block will be destroyed by flames when on fire.",
+              "type": "number",
+              "default": 20
+            }
+          }
+        }
+      ]
+    }
+  }
+]
