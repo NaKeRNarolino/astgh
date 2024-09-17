@@ -1,131 +1,263 @@
+use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::fmt::format;
 use std::fs;
 use std::ptr::null;
-use serde_json::{json, Map, Value};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Number, Value};
 
-fn parse_object(object: Map<String, Value>, structs: &mut String, last_obj_title: String, unique_ident: i32) -> Result<Value, ()> {
-    dbg!(&object);
-
-    let type_to_type: HashMap<&str, &str> = HashMap::from([
-        ("number", "i32"),
-        ("string", "String"),
-        ("array", "Vec<i32>"),
-        ("boolean", "bool"),
-        ("object", "Map<String, Value>")
-    ]);
-
-
-    let mut current_res = String::new();
-    let mut current_props: Map<String, Value> = Map::new();
-
-    if let Some(one_of) = object.get("oneOf").cloned() {
-        println!("ONEOF");
-        let title = object.get("title").unwrap_or(&json!(format!("{last_obj_title}{unique_ident}"))).clone();
-
-        if !title.is_string() {
-            panic!("'title' property should be of type String");
-        }
-
-        let title = title.as_str().unwrap().replace(' ', "");
-
-        let description = object.get("description").unwrap_or(&json!("UNDOCUMENTED")).clone();
-
-        if !description.is_string() {
-            panic!("'description' property should be of type String");
-        }
-
-        let description = description.as_str().unwrap();
-
-
-        current_res.push_str(&format!("/// {description} \n"));
-        current_res.push_str("#[derive(Clone, Serialize, Deserialize, Debug)]\n");
-        current_res.push_str(&format!("pub struct {last_obj_title}{title} {{\n"));
-
-        if !one_of.is_array() {
-            panic!("'oneOf' should be an array")
-        }
-
-
-
-        let schema: Map<String, Value> = one_of.as_array().cloned().unwrap().first().unwrap().clone().as_object().unwrap().clone();
-
-        let v: Map<String, Value> = parse_object(schema, structs, title, unique_ident + 1)?.as_object().unwrap().clone();
-
-        dbg!(&v);
-
-        for (k, v) in v {
-            let t = v.as_str().unwrap();
-
-            current_res.push_str(&format!("   pub {k}: {t},\n"))
-        }
-
-        structs.push_str(&current_res);
-        structs.push_str("}\n\n ");
-    } else if let Some(properties) = object.get("properties").cloned() {
-        if !properties.is_object() {
-            panic!("'properties' should be an object")
-        }
-
-        let properties: Map<String, Value> = properties.as_object().unwrap().clone();
-
-        for (k, v) in properties {
-            let props = v.as_object().unwrap().clone();
-
-            let title = props.get("title").expect("should have 'title' param").as_str().unwrap().to_string();
-
-            let type_id = props.get("type").expect("No type specified").as_str().unwrap_or("boolean");
-
-            let name = type_to_type[type_id];
-
-            current_props.insert(k, json!(name));
-        }
-
-        return Ok(json!(current_props));
-    } else if let Some(items) = object.get("items").cloned() {
-        return Ok(json!(type_to_type["array"]))
-    }
-
-    Ok(json!(""))
+#[derive(Clone, Debug)]
+struct TitleDesc {
+    name: String,
+    title: String,
+    description: String,
 }
 
-fn parse_schemas(file: String) -> String {
-    let mut structs: String = String::new();
-    let mut json: Vec<Value> = serde_json::from_str(&file).unwrap();
 
-    for schema_raw in json {
-        let is_obj = schema_raw.is_object();
+#[derive(Clone, Debug)]
+enum Element {
+    Number(TitleDesc),
+    String(TitleDesc),
+    Boolean(TitleDesc),
+    Object(TitleDesc, Vec<Element>),
+    Array(TitleDesc, String)
+}
 
-        if !is_obj {
-            panic!("Expected Object");
+#[derive(Clone, Debug)]
+struct Schema {
+    schema: Vec<Element>
+}
+
+#[derive(PartialEq)]
+enum ValType {
+    Number,
+    String,
+    Object,
+    Boolean,
+    Array
+}
+
+fn get_val_type(type_id: String) -> ValType {
+    if type_id == "number" || type_id == "integer" {
+        ValType::Number
+    } else if type_id == "string" {
+        ValType::String
+    } else if type_id == "bool" {
+        ValType::Boolean
+    } else if type_id == "object" {
+        ValType::Object
+    } else if type_id == "array" {
+        ValType::Array
+    } else {
+        ValType::String
+    }
+}
+
+fn get_key(val: Value, key: &str) -> String {
+    let q = val.clone().as_object().unwrap().clone();
+    let r = q.clone().get(key).cloned();
+
+    r.unwrap().as_str().unwrap().to_string()
+}
+
+fn get_obj_props(val: Value) -> Vec<Element> {
+    let mut props: Vec<Element> = vec![];
+
+    let raw_props = val.as_object().unwrap().get("properties").unwrap().as_object().unwrap();
+
+    for (k, v) in raw_props {
+        let type_id = v.as_object().unwrap().get("type").unwrap().as_str().unwrap();
+
+        let val_type = get_val_type(type_id.to_string());
+
+        let title = get_key(v.clone(), "title");
+        let description = get_key(v.clone(), "description");
+
+        props.push(
+            match val_type {
+                ValType::Number => {
+                    Element::Number(
+                        TitleDesc {
+                            title, description, name: k.clone()
+                        }
+                    )
+                }
+                ValType::String => {
+                    Element::String(
+                        TitleDesc {
+                            title, description, name: k.to_string()
+                        }
+                    )
+                }
+                ValType::Object => {
+                    Element::Object(
+                        TitleDesc {
+                            title, description, name: k.to_string()
+                        },
+                        get_obj_props(v.clone())
+                    )
+                }
+                ValType::Boolean => {
+                    Element::Boolean(
+                        TitleDesc {
+                            title, description, name: k.to_string()
+                        },
+                    )
+                }
+                ValType::Array => {
+                    let el_type = {
+                        let items = v.as_object().unwrap().get("items").unwrap();
+                        if items.clone().is_object() {
+                            match get_val_type(get_key(items.clone(), "type")) {
+                                ValType::Number => {
+                                    "f64".to_string()
+                                }
+                                ValType::String => {
+                                    "String".to_string()
+                                }
+                                ValType::Boolean => {
+                                    "bool".to_string()
+                                }
+                                ValType::Object => {
+                                    "Map<String, serde_json::Value>".to_string()
+                                }
+                                ValType::Array => {
+                                    format!("Vec<IDK>")
+                                }
+                            }
+                        } else {
+                            match get_val_type(get_key(items.as_array().unwrap().first().unwrap().clone(), "type")) {
+                                ValType::Number => {
+                                    "f64".to_string()
+                                }
+                                ValType::String => {
+                                    "String".to_string()
+                                }
+                                ValType::Boolean => {
+                                    "bool".to_string()
+                                }
+                                ValType::Object => {
+                                    "Map<String, serde_json::Value>".to_string()
+                                }
+                                ValType::Array => {
+                                    format!("Vec<IDK>")
+                                }
+                            }
+                        }
+                    };
+
+                    Element::Array(
+                        TitleDesc {
+                            title, description, name: k.to_string()
+                        },
+                        el_type
+                    )
+                }
+            }
+        )
+    }
+
+    props
+}
+
+
+fn parse(source: String) -> Schema {
+    let mut parsed: Schema = Schema {
+        schema: vec![],
+    };
+
+    let ser: Vec<Value> = serde_json::from_str(&source).unwrap();
+
+    dbg!(ser.clone());
+
+    for val in ser {
+        if get_val_type(get_key(val.clone(), "type")) == ValType::Object {
+            let title = get_key(val.clone(), "title");
+            let description = get_key(val.clone(), "description");
+            let title_desc = TitleDesc {
+                name: title.replace(' ', ""),
+                description: description.to_string(), title: title.clone()
+            };
+
+            let props = get_obj_props(val);
+
+            parsed.schema.push(
+              Element::Object(title_desc, props)
+            );
+        } else {
+            println!("Ignoring");
         }
+    }
 
-        let obj = schema_raw.as_object().unwrap().clone();
+    dbg!(parsed.clone());
+    parsed
+}
 
-        for (schema_id, schema_value) in obj {
-            let is_obj = schema_value.is_object();
+fn gen(src: Schema, id_next: String) -> String {
+    let mut string = String::new();
 
-            if !is_obj {
-                continue;
+    for el in src.schema {
+        if let Element::Object(ntd, props) = el {
+            let title = ntd.clone().title;
+            let description = ntd.clone().description;
+            let name = ntd.clone().name;
+
+            string.push_str(&format!("/// {description}\n"));
+            string.push_str("#[derive(Clone, Debug, Serialize, Deserialize)]\n");
+            string.push_str(&format!("struct {name}{id_next} {{\n"));
+
+            for element in props {
+                string.push_str(&format!("    {}: {}", match element.clone() {
+                    Element::Number(n) => {
+                        n.name
+                    }
+                    Element::String(n) => {
+                        n.name
+                    }
+                    Element::Boolean(n) => {
+                        n.name
+                    }
+                    Element::Object(n, _) => {
+                        n.name
+                    }
+                    Element::Array(n, _) => {
+                        n.name
+                    }
+                }, match element {
+                    Element::Number(_) => {
+                        "f64".to_string()
+                    }
+                    Element::String(_) => {
+                        "String".to_string()
+                    }
+                    Element::Boolean(_) => {
+                        "bool".to_string()
+                    }
+                    Element::Object(_, _) => {
+                        "Map<String, serde_json::Value>".to_string()
+                    }
+                    Element::Array(_, t) => {
+                        format!("Vec<{t}>")
+                    }
+                }));
+                string.push_str(",\n")
             }
 
-            let obj = schema_value.as_object().unwrap().clone();
-
-            parse_object(obj, &mut structs, "".to_string(), 0);
+            string.push_str("}\n\n")
         }
-
     }
 
 
-    structs
+    string
 }
 
 fn main() -> Result<(), ()> {
     let file = fs::read_to_string("./short_schema.json").expect("File 'short_schema.json' is not found!");
 
-    let structs: String = parse_schemas(file);
+    let structs = parse(file);
 
-    let _ = fs::write("./res.rs", structs);
+    let _ = fs::write("./res.rs", gen(structs, String::from("BlockComponent")));
+
 
     Ok(())
 }
